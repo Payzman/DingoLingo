@@ -2,6 +2,7 @@ import discord.state
 import discord.ext
 import musicbot.audiocontroller
 import musicbot.commands.music
+import musicbot.settings
 import musicbot.utils
 
 from unittest import IsolatedAsyncioTestCase
@@ -17,9 +18,9 @@ class Test(IsolatedAsyncioTestCase):
         await music._play_song(music, ctx, track="https://open.spotify.com/album"
                                                  "/1VNWqVr6mUMg177IODYb0T?si=XkXdpLrrTKmLitC0gS868g")
 
-
     @staticmethod
     def _setup_audiocontroller(guild: discord.Guild):
+        musicbot.utils.guild_to_settings[guild] = musicbot.settings.Settings(guild)
         musicbot.utils.guild_to_audiocontroller[guild] = musicbot.audiocontroller.AudioController(None, guild)
 
     @staticmethod
@@ -61,5 +62,22 @@ class Test(IsolatedAsyncioTestCase):
             'content': ''
         }
         msg = discord.Message(state=state, channel=chn, data=msg_data)
+        msg.author = MockAuthor()
         ctx = discord.ext.commands.context.Context(message=msg, prefix=None)
         return ctx
+
+
+class MockAuthor:
+    def __init__(self):
+        self.voice = MockVoice()
+
+
+class MockVoice:
+    def __init__(self):
+        self.channel = MockChannel()
+
+
+class MockChannel:
+    async def connect(self, reconnect, timeout):
+        print("[Mock] Connecting...")
+        pass
