@@ -4,6 +4,7 @@ import discord
 from config import config
 from discord.ext import commands
 from musicbot import linkutils, utils
+from musicbot.audiocontroller import AudioController
 
 
 class Music(commands.Cog):
@@ -41,11 +42,17 @@ class Music(commands.Cog):
             await ctx.send("Loop is enabled! Use {}loop to disable".format(config.BOT_PREFIX))
             return
 
-        song = await audiocontroller.process_song(track)
+        results = await audiocontroller.process_song(track)
 
-        if song is None:
+        if results[0] is AudioController.ERROR_UNKNOWN_WEBSITE or results[0] is AudioController.ERROR_AGE_RESTRICTION:
             await ctx.send(config.SONGINFO_ERROR)
             return
+
+        if results[0] is AudioController.ERROR_NOT_FOUND_ON_YOUTUBE:
+            await ctx.send(config.SONGINFO_NO_YT_RESULTS_TEMPLATE.format(results[1]))
+            return
+
+        song = results[1]
 
         if song.origin == linkutils.Origins.Default:
 

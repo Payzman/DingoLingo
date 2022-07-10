@@ -19,6 +19,10 @@ class AudioController(object):
                 current_song: A Song object that stores details of the current song.
                 guild: The guild in which the Audiocontroller operates.
         """
+    SUCCESS = 0
+    ERROR_NOT_FOUND_ON_YOUTUBE = 1
+    ERROR_UNKNOWN_WEBSITE = 2
+    ERROR_AGE_RESTRICTION = 3
 
     def __init__(self, bot, guild):
         self.bot = bot
@@ -68,13 +72,16 @@ class AudioController(object):
     async def play_song(self, song):
         """Plays a song object"""
 
-        if self.playlist.loop != True: #let timer run thouh if looping
+        if self.playlist.loop != True:  # let timer run thouh if looping
             self.timer.cancel()
             self.timer = utils.Timer(self.timeout_handler)
 
         if song.info.title == None:
             if song.host == linkutils.Sites.Spotify:
-                conversion = self.search_youtube(await linkutils.convert_spotify(song.info.webpage_url))
+                song_title = await linkutils.convert_spotify(song.info.webpage_url)
+                conversion = self.search_youtube(song_title)
+                if not conversion:
+                    return self.ERROR_NOT_FOUND_ON_YOUTUBE, song_title
                 song.info.webpage_url = conversion
 
             try:
@@ -89,7 +96,6 @@ class AudioController(object):
                 r = downloader.extract_info(
                     track, download=False)
 
-
             song.base_url = r.get('url')
             song.info.uploader = r.get('uploader')
             song.info.title = r.get('title')
@@ -103,7 +109,8 @@ class AudioController(object):
         self.playlist.playhistory.append(self.current_song)
 
         self.guild.voice_client.play(discord.FFmpegPCMAudio(
-            song.base_url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'), after=lambda e: self.next_song(e))
+            song.base_url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'),
+            after=lambda e: self.next_song(e))
 
         self.guild.voice_client.source = discord.PCMVolumeTransformer(
             self.guild.voice_client.source)
@@ -113,6 +120,7 @@ class AudioController(object):
 
         for song in list(self.playlist.playque)[:config.MAX_SONG_PRELOAD]:
             asyncio.ensure_future(self.preload(song))
+        return self.SUCCESS, song.info.title
 
     async def process_song(self, track):
         """Adds the track to the playlist instance and plays it, if it is the first song"""
@@ -125,7 +133,9 @@ class AudioController(object):
             await self.process_playlist(is_playlist, track)
 
             if self.current_song == None:
-                await self.play_song(self.playlist.playque[0])
+                result = await self.play_song(self.playlist.playque[0])
+                if result[0] is not self.SUCCESS:
+                    return result
                 print("Playing {}".format(track))
 
             song = Song(linkutils.Origins.Playlist,
@@ -134,7 +144,7 @@ class AudioController(object):
 
         if host == linkutils.Sites.Unknown:
             if linkutils.get_url(track) is not None:
-                return None
+                return self.ERROR_UNKNOWN_WEBSITE, track
 
             track = self.search_youtube(track)
 
@@ -154,7 +164,7 @@ class AudioController(object):
                     track, download=False)
             except Exception as e:
                 if "ERROR: Sign in to confirm your age" in str(e):
-                    return None
+                    return self.ERROR_AGE_RESTRICTION, track
         except:
             downloader = yt_dlp.YoutubeDL(
                 {'title': True, "cookiefile": config.COOKIE_PATH})
@@ -175,7 +185,7 @@ class AudioController(object):
             print("Playing {}".format(track))
             await self.play_song(song)
 
-        return song
+        return self.SUCCESS, song
 
     async def process_playlist(self, playlist_type, url):
 
@@ -198,7 +208,6 @@ class AudioController(object):
                 r = ydl.extract_info(url, download=False)
 
                 for entry in r['entries']:
-
                     link = "https://www.youtube.com/watch?v={}".format(
                         entry['id'])
 
@@ -223,7 +232,6 @@ class AudioController(object):
                 r = ydl.extract_info(url, download=False)
 
                 for entry in r['entries']:
-
                     link = entry.get('url')
 
                     song = Song(linkutils.Origins.Playlist,
@@ -283,7 +291,7 @@ class AudioController(object):
         with yt_dlp.YoutubeDL(options) as ydl:
             r = ydl.extract_info(title, download=False)
 
-        if r == None:
+        if r is None or not r['entries']:
             return None
 
         videocode = r['entries'][0]['id']
@@ -354,7 +362,6 @@ class AudioController(object):
     async def udisconnect(self):
         await self.stop_player()
         await self.guild.voice_client.disconnect(force=True)
-
 
     def clear_queue(self):
         self.playlist.playque.clear()
