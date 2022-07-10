@@ -8,7 +8,7 @@ class Test(IsolatedAsyncioTestCase):
     async def test_unknown_youtube_file(self):
         music = musicbot.commands.music.Music(None)
         data = {
-            'id': '993251638783520838',
+            'id': '0',
             'attachments': [],
             'embeds': [],
             'edited_timestamp': None,
@@ -18,7 +18,9 @@ class Test(IsolatedAsyncioTestCase):
             'tts': False,
             'content': ''
         }
-        msg = discord.Message(state=None, channel=None, data=data)
+        gld = discord.Guild(data=None, state=None)
+        chn = discord.TextChannel(state=None, guild=gld, data=None)
+        msg = discord.Message(state=None, channel=chn, data=data)
         ctx = discord.ext.commands.context.Context(message=msg, prefix=None)
         await music._play_song(music, ctx, track="https://open.spotify.com/album"
                                                  "/1VNWqVr6mUMg177IODYb0T?si=XkXdpLrrTKmLitC0gS868g")
